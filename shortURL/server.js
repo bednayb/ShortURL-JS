@@ -4,9 +4,13 @@ const express = require('express');
 const bodyParser = require('body-parser');
 const mysql = require('mysql');
 const app = express();
-//  JS files
+//  extra files
 let shortCode = require('./shortCode.js');
-let URL_validation = require('./URL_validation.js');
+let isRealURL = require('valid-url');
+
+
+app.use(bodyParser.json());
+app.use(express.static('client'));
 
 // ***** CREATE the MYSQL Connection *****
 const con = mysql.createConnection({
@@ -18,34 +22,58 @@ const con = mysql.createConnection({
 
 // ***** CHECK the MYSQL Connection *****
 con.connect(function(err){
-if(err){
-console.log("Error connecting to Db", err);
-return;
-}
-console.log("Connection established");
+  if(err){
+  console.log("Error connecting to Db", err);
+  return;
+  }
+  console.log("Connection established");
 });
 
-app.use(bodyParser.json());
-app.use(express.static('client'));
 
-app.post('/getURL', function (req, res) {
+// SAVE new element
+app.post('/sendURL', (req, res)=> {
   let Client_URL = req.body.case;
-  // it should be false
-  console.log(URL_validation(Client_URL));
-  // always same ShortCode  ??????????
-  let URL_short_Code = shortCode;
-  console.log(URL_short_Code);
-  // let URL_short_Code = Math.random().toString(36).substr(2, 8);
-  let data = {'Email': Client_URL, 'ShortCode': URL_short_Code};
+  if (isRealURL.isUri(Client_URL)){
+      //  console.log('Looks like an URI');
+    let URL_short_Code = shortCode();
+    let data = {'Email': Client_URL, 'ShortCode': URL_short_Code};
 
-  con.query(
-    'Insert INTO shorturl SET ?', data, function(err,res){
-  if(err) throw err;
+    con.query(
+      'Insert INTO shorturl SET ?', data, function(err,res){
+    if(err) throw err;
+    console.log('Last insert ID:', res.insertId);
+      }
+    );
+  }else {
+      console.log('Not a URL');
+  }
+});
 
-  console.log('Last insert ID:', res.insertId);
-}
-  );
+// Find URL from shortCode
+app.post('/getURL', (req, res)=> {
 
-})
+  let Client_ShortCode = req.body.case;
+
+  //database
+    let URL_to_client;
+
+    con.query(
+      'SELECT Email FROM shorturl WHERE ShortCode = ?' , Client_ShortCode ,function alma(err,res){
+      if(err) throw err;
+      console.log(res[0].Email);
+      URL_to_client = res[0].Email;
+    })
+    // in the future change to await
+    setTimeout(function(){
+      console.log(URL_to_client);
+      res.status(200).send(JSON.stringify(URL_to_client));
+    },50)
+
+});
+
+
+
+
+
 
 app.listen(5000);
